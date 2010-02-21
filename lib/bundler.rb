@@ -107,6 +107,30 @@ module Bundler
       @settings ||= Settings.new(root)
     end
 
+    def autorequire(path, explicit)
+      if explicit
+        Kernel.require(path)
+      else
+        begin
+          Kernel.require(path)
+        rescue LoadError
+        end
+      end
+    end
+
+    def trigger_autoload(specifier)
+      autorequires = autoloads[specifier] or
+        return false
+      autorequires.each do |args|
+        autorequire(*args)
+      end
+      true
+    end
+
+    def register_autoload(specifier, path, explicit)
+      autoloads[specifier] << [path, explicit]
+    end
+
   private
 
     def default_gemfile
@@ -124,6 +148,10 @@ module Bundler
       end
 
       Gem.clear_paths
+    end
+
+    def autoloads
+      @autoloads ||= Hash.new{|h,k| h[k] = []}
     end
   end
 end
