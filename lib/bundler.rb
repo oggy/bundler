@@ -37,6 +37,7 @@ module Bundler
   class VersionConflict  < BundlerError; status_code(6)  ; end
   class GemfileError     < BundlerError; status_code(4)  ; end
   class GitError         < BundlerError; status_code(11) ; end
+  class AutoloadError    < BundlerError; status_code(8)  ; end
   class DeprecatedMethod < BundlerError; status_code(12) ; end
   class DeprecatedOption < BundlerError; status_code(12) ; end
 
@@ -119,11 +120,14 @@ module Bundler
     end
 
     def trigger_autoload(specifier)
+      autoloaded[specifier] and
+        raise AutoloadError, "Gem did not autoload `#{specifier}'"
       autorequires = autoloads[specifier] or
         return false
       autorequires.each do |args|
         autorequire(*args)
       end
+      autoloaded[specifier] = true
       true
     end
 
@@ -152,6 +156,10 @@ module Bundler
 
     def autoloads
       @autoloads ||= Hash.new{|h,k| h[k] = []}
+    end
+
+    def autoloaded
+      @autoloaded ||= {}
     end
   end
 end

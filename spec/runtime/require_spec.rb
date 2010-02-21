@@ -224,6 +224,164 @@ describe "Bundler.require" do
       run "Bundler.require; Module.new.foo; p !!defined?(SlowLib)"
       out.should == "true"
     end
+
+    it "should raise an ArgumentError if an autoload constant is already defined" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", "module SlowLib; end"
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'SlowLib'
+      G
+
+      run <<-R
+        SlowLib = :boom
+        begin
+          Bundler.require
+          puts 'LOSE'
+        rescue ArgumentError
+          puts 'WIN'
+        end
+      R
+      out.should == "WIN"
+    end
+
+    it "should raise an ArgumentError if an autoload instance method is already defined" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", "module SlowLib; end"
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'Module#foo'
+      G
+
+      run <<-R
+        class Module
+          def foo
+            :boom
+          end
+        end
+
+        begin
+          Bundler.require
+          puts 'LOSE'
+        rescue ArgumentError
+          puts 'WIN'
+        end
+      R
+      out.should == "WIN"
+    end
+
+    it "should raise an ArgumentError if an autoload class method is already defined" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", "module SlowLib; end"
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'Module.foo'
+      G
+
+      run <<-R
+        def Module.foo
+          :boom
+        end
+
+        begin
+          Bundler.require
+          puts 'LOSE'
+        rescue ArgumentError
+          puts 'WIN'
+        end
+      R
+      out.should == "WIN"
+    end
+
+    it "should raise an AutoloadError if the autoloaded gem doesn't define the triggering constant" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", "module SlowLib; end"
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'WrongConstant'
+      G
+
+      run <<-R
+        begin
+          Bundler.require
+          WrongConstant
+          puts 'LOSE'
+        rescue Bundler::AutoloadError
+          puts 'WIN'
+        end
+      R
+      out.should == "WIN"
+    end
+
+    it "should raise an AutoloadError if the autoloaded gem doesn't define the triggering instance method" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", "module SlowLib; end"
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'String#wrong_method'
+      G
+
+      run <<-R
+        begin
+          Bundler.require
+          ''.wrong_method
+          puts 'LOSE'
+        rescue Bundler::AutoloadError
+          puts 'WIN'
+        end
+      R
+      out.should == "WIN"
+    end
+
+    it "should raise an AutoloadError if the autoloaded gem doesn't define the triggering class method" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", "module SlowLib; end"
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'String.wrong_method'
+      G
+
+      run <<-R
+        begin
+          Bundler.require
+          String.wrong_method
+          puts 'LOSE'
+        rescue Bundler::AutoloadError
+          puts 'WIN'
+        end
+      R
+      out.should == "WIN"
+    end
+
+    it "should not load a gem twice if autoloaded via two different triggers" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", "Foo = Bar = 1; puts 'loaded'"
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => %w'Foo Bar'
+      G
+
+      run <<-R
+        Bundler.require
+        Foo
+        Bar
+      R
+      out.should == "loaded"
+    end
   end
 
   describe "requiring the environment directly" do

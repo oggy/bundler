@@ -226,12 +226,20 @@ module Bundler
 
       case separator
       when '#'
+        check_autoload_trigger(specifier) { mod.method_defined?(base_name) }
         install_instance_method_autoloader(mod, mod_name, separator)
       when '.'
+        check_autoload_trigger(specifier) { mod.respond_to?(base_name) }
         install_class_method_autoloader(mod, mod_name, separator)
       when '::'
+        check_autoload_trigger(specifier) { mod.const_defined?(base_name) }
         install_constant_autoloader(mod, mod_name, separator)
       end
+    end
+
+    def check_autoload_trigger(specifier)
+      !yield or
+        raise ArgumentError, "`#{specifier}' already defined"
     end
 
     def install_instance_method_autoloader(mod, mod_name, separator)
