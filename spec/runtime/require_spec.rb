@@ -365,7 +365,7 @@ describe "Bundler.require" do
       out.should == "WIN"
     end
 
-    it "should not load a gem twice if autoloaded via two different triggers" do
+    it "should not load a library twice if autoloaded via two different triggers" do
       build_lib "slow_lib", "1.0.0" do |s|
         s.write "lib/slow_lib.rb", "Foo = Bar = 1; puts 'loaded'"
       end
@@ -381,6 +381,78 @@ describe "Bundler.require" do
         Bar
       R
       out.should == "loaded"
+    end
+
+    it "should be invisible to the autoloaded library if it tries to reference the triggering constant before setting it" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", <<-EOS
+          begin
+            SlowLib
+            puts 'LOSE'
+          rescue NameError
+            puts 'WIN'
+          end
+        EOS
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'SlowLib'
+      G
+
+      run <<-R
+        Bundler.require
+        SlowLib
+      R
+      out.should == "WIN"
+    end
+
+    it "should be invisible to the autoloaded library if it tries to reference the triggering instance method before defining it" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", <<-EOS
+          begin
+            ''.foo
+            puts 'LOSE'
+          rescue NameError
+            puts 'WIN'
+          end
+        EOS
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'String#foo'
+      G
+
+      run <<-R
+        Bundler.require
+        ''.foo
+      R
+      out.should == "WIN"
+    end
+
+    it "should be invisible to the autoloaded library if it tries to reference the triggering class method before defining it" do
+      build_lib "slow_lib", "1.0.0" do |s|
+        s.write "lib/slow_lib.rb", <<-EOS
+          begin
+            String.foo
+            puts 'LOSE'
+          rescue NameError
+            puts 'WIN'
+          end
+        EOS
+      end
+
+      gemfile <<-G
+        path "#{lib_path}"
+        gem "slow_lib", :autoload => 'String.foo'
+      G
+
+      run <<-R
+        Bundler.require
+        String.foo
+      R
+      out.should == "WIN"
     end
   end
 

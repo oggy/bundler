@@ -120,14 +120,24 @@ module Bundler
     end
 
     def trigger_autoload(specifier)
-      autoloaded[specifier] and
-        raise AutoloadError, "Gem did not autoload `#{specifier}'"
       autorequires = autoloads[specifier] or
+        # No autoload registered.
         return false
+
+      if autorequires == :loaded
+        # This constant/method should have been loaded.
+        raise AutoloadError, "Gem did not autoload `#{specifier}'"
+      elsif autorequires == :loading
+        # This constant/method is being referred to by the gem that
+        # should be loading it. Pretend we're not here.
+        return false
+      end
+
+      autoloads[specifier] = :loading
       autorequires.each do |args|
         autorequire(*args)
       end
-      autoloaded[specifier] = true
+      autoloads[specifier] = :loaded
       true
     end
 
@@ -156,10 +166,6 @@ module Bundler
 
     def autoloads
       @autoloads ||= Hash.new{|h,k| h[k] = []}
-    end
-
-    def autoloaded
-      @autoloaded ||= {}
     end
   end
 end
